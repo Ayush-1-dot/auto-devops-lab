@@ -1,1 +1,7 @@
-# Prometheus scrape config as per document.
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'flask_app'
+    static_configs:
+      - targets: ['sample_app:5000']
