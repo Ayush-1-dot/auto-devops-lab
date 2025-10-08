@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+jenkins_home/
+grafana_data/
+*.pem
+.terraform/
+.terraform.lock.hcl

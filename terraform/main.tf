@@ -1,0 +1,1 @@
+# Terraform configuration main.tf as per document.

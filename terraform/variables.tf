@@ -1,0 +1,1 @@
+# Terraform variables.tf as per document.

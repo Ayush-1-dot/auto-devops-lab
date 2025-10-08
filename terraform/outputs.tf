@@ -1,0 +1,1 @@
+# Terraform outputs.tf as per document.
