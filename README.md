@@ -60,6 +60,10 @@ cd auto-devops-lab
 Feel free to fork and open pull requests for improvements!
 
 ---
+## Connect
+
+- 🌐 [LinkedIn (Ayush Agnihotri)](https://www.linkedin.com/in/ayush-agnihotri-206a501b1/)
+- 💻 [GitHub Repo: auto-devops-lab](https://github.com/Ayush-1-dot/auto-devops-lab)
 
 ## 📋 License
 
