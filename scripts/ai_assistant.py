@@ -4,12 +4,15 @@ import subprocess
 import json
 import requests
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
 OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
 
 app = Flask(__name__)
 
+# Allowed services for validation
+ALLOWED_SERVICES = {'sample_app', 'nginx', 'prometheus', 'grafana', 'ai_assistant'}
 
 def get_system_info():
     info = {}
@@ -47,13 +50,13 @@ def get_system_info():
         info['load'] = 'N/A'
     return info
 
-
-def check_service_health(service_name):
+150160(service_name):
     service_urls = {
         'sample_app': 'http://localhost:5000',
         'nginx': 'http://localhost:80',
         'prometheus': 'http://localhost:9090',
         'grafana': 'http://localhost:3000',
+        'ai_assistant': 'http://localhost:5050',
     }
     url = service_urls.get(service_name, service_urls.get('sample_app'))
     try:
@@ -63,27 +66,28 @@ def check_service_health(service_name):
     except Exception as e:
         return {'status': 'unhealthy', 'error': str(e)}
 
-
 def get_recent_logs(service_name, lines=50):
+    # Validate service name to prevent injection
+    if service_name not in ALLOWED_SERVICES:
+        return f'Invalid service: {service_name}. Allowed: {", ".join(ALLOWED_SERVICES)}'
+    
     try:
         logs = subprocess.check_output(
             ['docker', 'logs', '--tail', str(lines), service_name],
             text=True, stderr=subprocess.STDOUT)
         return logs[-4000:]
     except Exception as e:
-        return f'Could not fetch logs: {e}'
-
+        return f'Could not fetch logs: {str(e)}'
 
 def get_health_check_logs():
     log_file = '/var/log/auto_devops_health.log'
-    if os.path.exists(log_file):
-        try:
-            with open(log_file, 'r') as f:
-                return f.read()[-4000:]
-        except Exception:
-            pass
-    return 'No health check log file found.'
-
+    try:
+        with open(log_file, 'r') as f:
+            return f.read()[-4000:]
+    except FileNotFoundError:
+        return 'No health check log file found.'
+    except Exception as e:
+        return f'Could not read health check logs: {str(e)}'
 
 def get_backup_status():
     backup_dir = '/var/backups/auto-devops'
@@ -94,7 +98,6 @@ def get_backup_status():
         except Exception as e:
             return {'exists': True, 'error': str(e)}
     return {'exists': False}
-
 
 def call_openai(messages):
     if not OPENAI_API_KEY:
@@ -113,19 +116,41 @@ def call_openai(messages):
         url = 'https://api.openai.com/v1/chat/completions'
         resp = requests.post(url, headers=headers, json=data, timeout=60)
         resp.raise_for_status()
-        return resp.json()['choices'][0]['message']['content']
+        
+        # Safely parse response with error handling
+        response_json = resp.json()
+        if 'choices' not in response_json or len(response_json['choices']) == 0:
+            return 'No response from AI'
+        
+        content = response_json['choices'][0].get('message', {}).get('content', 'Empty response')
+        return content
     except requests.exceptions.HTTPError as e:
         return f'OpenAI API error: {e.response.status_code}'
+    except (KeyError, IndexError, ValueError) as e:
+        return f'Error parsing OpenAI response: {str(e)}'
     except Exception as e:
         return f'Error calling AI: {str(e)}'
-
 
 def build_system_context():
     sys_info = get_system_info()
     health = {}
     services = ['sample_app', 'nginx', 'prometheus', 'grafana']
-    for svc in services:
-        health[svc] = check_service_health(svc)
+    
+    # Use ThreadPoolExecutor for parallel service health checks (non-blocking)
+    try:
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = {executor.submit(check_service_health, svc): svc for svc in services}
+            for future in as_completed(futures, timeout=6):
+                svc = futures[future]
+                try:
+                    health[svc] = future.result()
+                except Exception as e:
+                    health[svc] = {'status': 'error', 'error': str(e)}
+    except Exception as e:
+        # Fallback to sequential if threading fails
+        for svc in services:
+            health[svc] = check_service_health(svc)
+    
     context_lines = [
         'You are an AI assistant for the Auto DevOps Lab.',
         'Current environment state:',
@@ -153,8 +178,15 @@ def build_system_context():
         'Respond in plain English, be concise but thorough.',
         'Suggest actionable next steps.'
     ]
-    return '\n'.join(context_lines)
-
+    
+    context = '\n'.join(context_lines)
+    
+    # Limit context size to prevent token overflow (~6000 tokens = ~24KB)
+    MAX_CONTEXT_SIZE = 24000
+    if len(context) > MAX_CONTEXT_SIZE:
+        context = context[:MAX_CONTEXT_SIZE] + '\n[Context truncated...]'
+    
+    return context
 
 @app.route('/ai/explain', methods=['GET', 'POST'])
 def explain():
@@ -162,7 +194,8 @@ def explain():
     user_question = ''
     if request.method == 'POST':
         data = request.get_json() or {}
-        user_question = data.get('question', '')
+        user_question = data.get('question', '').strip()
+    
     prompt = 'Explain the current state of this Auto DevOps Lab '
     prompt += 'environment. ' + user_question
     messages = [
@@ -172,14 +205,14 @@ def explain():
     response = call_openai(messages)
     return jsonify({'response': response, 'context': 'system_state'})
 
-
 @app.route('/ai/troubleshoot', methods=['POST'])
 def troubleshoot():
     data = request.get_json() or {}
-    issue = data.get('issue', '')
-    service = data.get('service', '')
+    issue = data.get('issue', '').strip()
+    service = data.get('service', '').strip()
     if not issue:
         return jsonify({'error': 'Please provide an issue description'}), 400
+    
     context = build_system_context()
     logs = get_recent_logs(service) if service else ''
     prompt = context + '\n\nRecent logs: ' + logs[:2000]
@@ -192,12 +225,19 @@ def troubleshoot():
     response = call_openai(messages)
     return jsonify({'response': response, 'context': 'troubleshooting'})
 
-
 @app.route('/ai/analyze-logs', methods=['POST'])
 def analyze_logs():
     data = request.get_json() or {}
-    service = data.get('service', 'sample_app')
+    service = data.get('service', 'sample_app').strip()
     lines = data.get('lines', 100)
+    
+    # Validate lines parameter
+    try:
+        lines = int(lines)
+        lines = max(10, min(lines, 1000))  # Clamp between 10 and 1000
+    except (ValueError, TypeError):
+        lines = 100
+    
     logs = get_recent_logs(service, lines)
     context = build_system_context()
     prompt = context + '\n\nYou are a log analysis expert. '
@@ -210,7 +250,6 @@ def analyze_logs():
     response = call_openai(messages)
     return jsonify({'response': response, 'service': service, 'lines': lines})
 
-
 @app.route('/ai/status', methods=['GET'])
 def ai_status():
     return jsonify({
@@ -220,11 +259,10 @@ def ai_status():
         'system': get_system_info()
     })
 
-
 @app.route('/ai/chat', methods=['POST'])
 def chat():
     data = request.get_json() or {}
-    message = data.get('message', '')
+    message = data.get('message', '').strip()
     if not message:
         return jsonify({'error': 'Please provide a message'}), 400
     context = build_system_context()
@@ -235,11 +273,9 @@ def chat():
     response = call_openai(messages)
     return jsonify({'response': response})
 
-
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({'status': 'ok'})
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5050, debug=False)
