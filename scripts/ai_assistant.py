@@ -163,11 +163,11 @@ def explain():
     if request.method == 'POST':
         data = request.get_json() or {}
         user_question = data.get('question', '')
-    user_msg = f"Explain the current state of this Auto DevOps Lab " + \
-               f"environment. {user_question}".strip()
+    prompt = 'Explain the current state of this Auto DevOps Lab '
+    prompt += 'environment. ' + user_question
     messages = [
         {'role': 'system', 'content': context},
-        {'role': 'user', 'content': user_msg}
+        {'role': 'user', 'content': prompt.strip()}
     ]
     response = call_openai(messages)
     return jsonify({'response': response, 'context': 'system_state'})
@@ -181,15 +181,12 @@ def troubleshoot():
     if not issue:
         return jsonify({'error': 'Please provide an issue description'}), 400
     context = build_system_context()
-    logs = ''
-    if service:
-        logs = get_recent_logs(service)
-    sys_msg = f"{context}\n\nRecent logs for '{service}' " + \
-              f"(if applicable):\n{logs[:2000]}\n\n" + \
-              f"You are a DevOps troubleshooting expert. " + \
-              f"Analyze the issue and provide a diagnosis and fix."
+    logs = get_recent_logs(service) if service else ''
+    prompt = context + '\n\nRecent logs: ' + logs[:2000]
+    prompt += '\n\nYou are a DevOps troubleshooting expert. '
+    prompt += 'Analyze the issue and provide a diagnosis and fix.'
     messages = [
-        {'role': 'system', 'content': sys_msg},
+        {'role': 'system', 'content': prompt},
         {'role': 'user', 'content': f"Issue: {issue}"}
     ]
     response = call_openai(messages)
@@ -203,13 +200,12 @@ def analyze_logs():
     lines = data.get('lines', 100)
     logs = get_recent_logs(service, lines)
     context = build_system_context()
-    sys_msg = f"{context}\n\n" + \
-              f"You are a log analysis expert. " + \
-              f"Find errors, warnings, and anomalies in the " + \
-              f"following logs and explain what they mean."
+    prompt = context + '\n\nYou are a log analysis expert. '
+    prompt += 'Find errors, warnings, and anomalies in the following '
+    prompt += 'logs and explain what they mean.'
     messages = [
-        {'role': 'system', 'content': sys_msg},
-        {'role': 'user', 'content': f"Logs from container '{service}':\n{logs}"}
+        {'role': 'system', 'content': prompt},
+        {'role': 'user', 'content': f"Logs from '{service}':\n{logs}"}
     ]
     response = call_openai(messages)
     return jsonify({'response': response, 'service': service, 'lines': lines})
