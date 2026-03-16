@@ -1,0 +1,55 @@
+name: AI Assistant CI
+
+on:
+  push:
+    paths:
+      - 'scripts/ai_assistant.py'
+      - 'scripts/Dockerfile.ai'
+      - '.github/workflows/ai-assistant-ci.yml'
+  pull_request:
+    paths:
+      - 'scripts/ai_assistant.py'
+      - 'scripts/Dockerfile.ai'
+
+jobs:
+  lint:
+    name: Lint Python
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8
+
+      - name: Lint with flake8
+        run: flake8 scripts/ai_assistant.py --count --show-source --statistics --max-line-length=120
+
+  build:
+    name: Build AI Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Dockerfile.ai
+        run: |
+          cd scripts
+          docker build -f Dockerfile.ai -t auto-ai-assistant:test .
+
+      - name: Test AI service starts
+        run: |
+          cd scripts
+          docker run -d -p 5050:5050 --name ai-test auto-ai-assistant:test
+          sleep 5
+          docker logs ai-test
+          docker exec ai-test curl -sf http://localhost:5050/health || (docker logs ai-test && exit 1)
+          docker stop ai-test
+          docker rm ai-test
