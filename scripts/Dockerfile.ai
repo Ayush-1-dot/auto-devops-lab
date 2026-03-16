@@ -1,0 +1,6 @@
+FROM python:3.11-slim
+WORKDIR /app
+RUN pip install --no-cache-dir flask requests openai
+COPY ai_assistant.py /app/ai_assistant.py
+EXPOSE 5050
+CMD ["python", "ai_assistant.py"]
