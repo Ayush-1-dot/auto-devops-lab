@@ -35,3 +35,17 @@ services:
       - "3000:3000"
     depends_on:
       - prometheus
+
+  ai_assistant:
+    build: .
+    dockerfile: ./scripts/Dockerfile.ai
+    container_name: auto-ai-assistant
+    ports:
+      - "5050:5050"
+    environment:
+      - OPENAI_API_KEY
+      - OPENAI_MODEL=gpt-4o-mini
+    volumes:
+      - ./scripts/ai_assistant.py:/app/ai_assistant.py:ro
+    depends_on:
+      - sample_app
