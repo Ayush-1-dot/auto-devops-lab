@@ -128,6 +128,46 @@ Contributions welcome. Suggested follow-ups:
 - Store OpenAI keys securely via SSM and attach an IAM role to the instance
 - Add a smoke-test that runs after `terraform apply` to verify endpoints
 
+## AI Assistant
+
+The AI Assistant is an OpenAI-powered chatbot that runs on port `5050`. It provides real-time troubleshooting, log analysis, and environment explanation.
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/ai/explain` | GET, POST | Get an AI explanation of the current environment state |
+| `/ai/troubleshoot` | POST | Ask the AI to diagnose and fix an issue |
+| `/ai/analyze-logs` | POST | Have the AI analyze container logs for errors |
+| `/ai/chat` | POST | General chat with the AI assistant |
+| `/ai/status` | GET | Check if the AI is configured and healthy |
+
+### Example Usage
+
+```bash
+# Check AI status
+curl http://localhost:5050/ai/status
+
+# Get an environment explanation
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"question": "What services are running?"}' \
+  http://localhost:5050/ai/explain
+
+# Troubleshoot an issue
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"issue": "Grafana dashboard shows no data", "service": "grafana"}' \
+  http://localhost:5050/ai/troubleshoot
+
+# Analyze container logs
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"service": "nginx", "lines": 100}' \
+  http://localhost:5050/ai/analyze-logs
+```
+
+### Enabling on EC2 Sandbox
+
+When provisioning with Terraform, set `enable_ai = true` and provide `openai_key`. The assistant will auto-start on the instance.
+
 ---
 
 ## Connect
