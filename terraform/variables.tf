@@ -13,7 +13,7 @@ variable "instance_type" {
 variable "ssh_allow_cidr" {
   description = "CIDR block allowed to SSH to the sandbox"
   type        = string
-  default     = "0.0.0.0/0"
+  default     = "= ""  # SECURITY: Set to your IP/32 or VPN CIDR - DO NOT use 0.0.0.0/0 in production!
 }
 
 variable "git_repo" {
