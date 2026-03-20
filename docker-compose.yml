@@ -2,7 +2,64 @@ version: '3.8'
 services:
   sample_app:
     build: ./sample_app
+    container_name: auto-sample-appservices:
+  sample_app:
+    build: ./sample_app
     container_name: auto-sample-app
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+
+  nginx:
+    image: nginx:latest
+    container_name: auto-nginx
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      sample_app:
+        condition: service_healthy
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: auto-prometheus
+    volumes:
+      - ./prometheus:/etc/prometheus
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: auto-grafana
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+  ai_assistant:
+    build:
+      context: .
+      dockerfile: ./scripts/Dockerfile.ai
+    container_name: auto-ai-assistant
+    ports:
+      - "5050:5050"
+    environment:
+      - OPENAI_API_KEY
+      - OPENAI_MODEL=gpt-4o-mini
+    volumes:
+      - ./scripts/ai_assistant.py:/app/ai_assistant.py:ro
+    depends_on:
+      - sample_app
     ports:
       - "5000:5000"
     environment:
