@@ -45,6 +45,7 @@ jobs:
           docker build -f Dockerfile.ai -t auto-ai-assistant:test .
 
       - name: Test AI service starts
+        timeout-minutes: 2  # Prevent hanging if container fails to start
         run: |
           cd scripts
           docker run -d -p 5050:5050 --name ai-test auto-ai-assistant:test
@@ -53,3 +54,5 @@ jobs:
           docker exec ai-test curl -sf http://localhost:5050/health || (docker logs ai-test && exit 1)
           docker stop ai-test
           docker rm ai-test
+              docker stop ai-test || true  # Ignore error if container not running
+                  docker rm ai-test || true  # Ignore error if container already removed
