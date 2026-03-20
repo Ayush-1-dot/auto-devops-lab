@@ -7,6 +7,12 @@ services:
       - "5000:5000"
     environment:
       - FLASK_ENV=development
+        healthcheck:
+            test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+                interval: 5s
+                    timeout: 3s
+                        retries: 3
+                            start_period: 30s
   nginx:
     image: nginx:latest
     container_name: auto-nginx
@@ -15,7 +21,8 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - sample_app
+      sample_app:
+            condition: service_healthy
   prometheus:
     image: prom/prometheus:latest
     container_name: auto-prometheus
