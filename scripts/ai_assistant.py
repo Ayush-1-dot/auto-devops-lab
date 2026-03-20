@@ -50,7 +50,7 @@ def get_system_info():
         info['load'] = 'N/A'
     return info
 
-150160(service_name):
+def check_service_health(service_name):
     service_urls = {
         'sample_app': 'http://localhost:5000',
         'nginx': 'http://localhost:80',
